@@ -162,7 +162,7 @@ impl EmulateCommand for BKCommand {
                     let search = format!("%{}%", name);
                     let mut stmt = self
                         .conn
-                        .prepare("SELECT name, url FROM bookmarks WHERE name LIKE ?1")
+                        .prepare("SELECT name, url FROM bookmarks WHERE name LIKE ?1") //unclosed parameter error
                         .map_err(|e| e.to_string())?;
                     let bk_iter = stmt
                         .query_map([&search], |row| Ok((row.get(0)?, row.get(1)?)))
@@ -192,6 +192,7 @@ fn main() {
     terminal.register(Box::new(TimesCommand { count: 0 }));
     terminal.register(Box::new(PingCommand {}));
     terminal.register(Box::new(HelloCommand {}));
+
     match BKCommand::new() {
         Ok(mut bk) => {
             let _ = bk.exec(&[
