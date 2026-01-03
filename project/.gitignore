@@ -1,0 +1,6 @@
+/tpaste-cli/target
+/tpaste-cli/Cargo.lock
+.vscode
+/tpaste-server/target
+/tpaste-server/Cargo.lock
+/tpaste-server/src/login.rs
