@@ -1,7 +1,6 @@
 use chrono::{DateTime, Duration, Utc};
 use rusqlite::{Connection, Result, params};
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct Database {
@@ -167,17 +166,62 @@ impl Database {
             Ok((user_id, expires_at))
         });
 
-        match result{
-            Ok((user_id,expires_at))=>{
+        match result {
+            Ok((user_id, expires_at)) => {
                 //check if the token expired
-                if Utc::now()>expires_at{
+                if Utc::now() > expires_at {
                     Ok(None) //expired token
-                }
-                else{
-                    Ok(Some(user_id))//validate token
+                } else {
+                    Ok(Some(user_id)) //validate token
                 }
             }
+            Err(e) => Ok(None), //token doesn't exist
         }
-        Err(_) =>Ok(None)
+    }
+
+    //paste table operations
+    pub fn create_paste(&self, user_id: i64, code: &str, content: &str) -> Resul<i64> {
+        let created_at = Utc::now().to_rfc3339();
+
+        self.conn.execute(
+            "INSERT INTO pastes (user_id,code,content,created_at) VALUES (?1,?2,?3,?4)",
+            params![user_id, code, content, created_at],
+        )?;
+
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    //getting the paste by code
+    pub fn get_paste_by_code(&self, code: &str) -> Result<Paste> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id,user_id,code,content,created_at FROM pastes WHERE code=?1")?;
+
+        let paste = stmt.query_row(params![code], |row| {
+            let created_str: String = row.get(4)?;
+            let created_at = DateTime::parse_from_rfc3339(&created_at)
+                .unwrap()
+                .with_timezone(&Utc);
+
+            Ok(Paste {
+                id: row.get(0)?,
+                user_id: row.get(1)?,
+                code: row.get(2)?,
+                content: row.get(3)?,
+                created_at,
+            })
+        })?;
+
+        Ok(paste)
+    }
+
+    //check if a code already exists
+    pub fn code_exists(&self, code: &str) -> Result<bool> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT COUNT(*) FROM pastes WHERE code=?1")?;
+        let count: i64 = stmt_query_row(params![code], |row| row.get(0))?;
+
+        Ok(count > 0)
     }
 }

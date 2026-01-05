@@ -3,4 +3,3 @@
 .vscode
 /tpaste-server/target
 /tpaste-server/Cargo.lock
-/tpaste-server/src/helper_funcions.rs
