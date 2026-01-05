@@ -80,5 +80,104 @@ impl Database {
     }
 
     //finding a user
-    pub fn get_user(&self, username: &str) -> Result<User> {}
+    pub fn get_user(&self, username: &str) -> Result<User> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id,username,password_hash,created_at from users WHERE username=?1")?;
+
+        let user = stmt.query_row(params![username], |row| {
+            let created_str: String = row.get(3)?;
+            let created_at = DateTime::parse_from_rfc3339(&created_str)
+                .unwrap()
+                .with_timezone(&Utc);
+
+            Ok(User {
+                id: row.get(0)?,
+                username: row.get(1)?,
+                password_hash: row.get(2)?,
+                created_at,
+            })
+        })?;
+
+        Ok(user)
+    }
+
+    pub fn get_user_id(&self, user_id: i64) -> Result<User> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id,username,password_hash,created_at from users WHERE id=?1")?;
+
+        let user = stmt.query_row(params![user_id], |row| {
+            let created_str: String = row.get(3)?;
+            let created_at = DateTime::parse_from_rfc3339(&created_str)
+                .unwrap()
+                .with_timezone(&Utc);
+
+            Ok(User {
+                id: row.get(0)?,
+                username: row.get(1)?,
+                password_hash: row.get(2)?,
+                created_at,
+            })
+        })?;
+
+        Ok(user)
+    }
+    pub fn username_exists(&self, username: &str) -> Result<bool> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT COUNT(*) FROM users WHERE username=?1")?;
+        let count: i64 = stmt.query_row(params![username], |row| row.get(0))?;
+
+        Ok(count > 0)
+    }
+
+    //token table operation
+    pub fn create_token(&self, user_id: i64, token: &str) -> Result<i64> {
+        let created_at = Utc::now();
+        let expires_at = created_at + Duration::days(60);
+
+        self.conn.execute(
+            "INSERT INTO auth_tokens(user_id,token,created_at,expires_at) VALUES (?1,?2,?3,?4)",
+            params![
+                user_id,
+                token,
+                created_at.to_rfc3339(),
+                expires_at,
+                to_rfc3339()
+            ],
+        )?;
+
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    //validate a token
+    pub fn validate_token(&self, token: &str) -> Result<Option<i64>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT user_id,expires_at FROM auth_token=?1")?;
+
+        let result = stmt.query_row(params![token], |row| {
+            let user_id: i64 = row.get(0)?;
+            let expires_str: String = row.get(1)?;
+            let expires_at = DateTime::parse_from_rfc3339(&expires_str)
+                .unwrap()
+                .with_timezone(&Utc);
+
+            Ok((user_id, expires_at))
+        });
+
+        match result{
+            Ok((user_id,expires_at))=>{
+                //check if the token expired
+                if Utc::now()>expires_at{
+                    Ok(None) //expired token
+                }
+                else{
+                    Ok(Some(user_id))//validate token
+                }
+            }
+        }
+        Err(_) =>Ok(None)
+    }
 }
