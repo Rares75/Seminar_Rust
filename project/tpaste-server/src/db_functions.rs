@@ -1,8 +1,8 @@
 use chrono::{DateTime, Duration, Utc};
 use rusqlite::{Connection, Result, params};
 
+use crate::db_model::{Paste, Token, User};
 use std::time::{SystemTime, UNIX_EPOCH};
-
 pub struct Database {
     conn: Connection,
 }
@@ -142,8 +142,7 @@ impl Database {
                 user_id,
                 token,
                 created_at.to_rfc3339(),
-                expires_at,
-                to_rfc3339()
+                expires_at.to_rfc3339()
             ],
         )?;
 
@@ -180,7 +179,7 @@ impl Database {
     }
 
     //paste table operations
-    pub fn create_paste(&self, user_id: i64, code: &str, content: &str) -> Resul<i64> {
+    pub fn create_paste(&self, user_id: i64, code: &str, content: &str) -> Result<i64> {
         let created_at = Utc::now().to_rfc3339();
 
         self.conn.execute(
@@ -199,7 +198,7 @@ impl Database {
 
         let paste = stmt.query_row(params![code], |row| {
             let created_str: String = row.get(4)?;
-            let created_at = DateTime::parse_from_rfc3339(&created_at)
+            let created_at = DateTime::parse_from_rfc3339(&created_str)
                 .unwrap()
                 .with_timezone(&Utc);
 
@@ -220,7 +219,7 @@ impl Database {
         let mut stmt = self
             .conn
             .prepare("SELECT COUNT(*) FROM pastes WHERE code=?1")?;
-        let count: i64 = stmt_query_row(params![code], |row| row.get(0))?;
+        let count: i64 = stmt.query_row(params![code], |row| row.get(0))?;
 
         Ok(count > 0)
     }

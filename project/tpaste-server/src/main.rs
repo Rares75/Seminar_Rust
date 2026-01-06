@@ -1,4 +1,13 @@
+mod db_functions;
+mod db_model;
+mod helper_funcions;
 mod login;
+
+use crate::db_functions::Database;
+use crate::db_model::{Paste, Token, User};
+use crate::helper_funcions::{
+    generate_auth_token, generate_paste_code, hash_password, validate_password, validate_username,
+};
 use crate::login::login;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -7,7 +16,7 @@ use std::thread;
 fn handle_client(mut stream: TcpStream) {
     let mut username: String = String::new();
     let mut password: String = String::new();
-    let message = "welcome, please login so you can use tpaste command\n";
+    let message = "welcome, please login so you can use tpaste command,if you don't have an account, use sign_up command to create a new account\n";
     stream.write_all(message.as_bytes());
     let mut buffer = [0; 256]; // buffer of 256 bytes
     match stream.read(&mut buffer) {

@@ -1,5 +1,5 @@
 use chrono::{DateTime, Local, NaiveDateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct User {

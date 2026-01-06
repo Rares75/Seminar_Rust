@@ -3,13 +3,14 @@ use rusqlite::{Connection, Result, params};
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::Write;
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::iter;
 use std::time::{SystemTime, UNIX_EPOCH};
 pub fn generate_paste_code() -> String {
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
     //saving the time
-    let timestamp = SystemTime::new()
+    let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
@@ -42,7 +43,7 @@ pub fn generate_auth_token() -> String {
     let hash1 = hasher.finish();
 
     //generate a second hash for mor randomness
-    let mut haser2 = DefaultHasher::new();
+    let mut hasher2 = DefaultHasher::new();
     hash1.hash(&mut hasher2);
     let hash2 = hasher2.finish();
 
@@ -52,12 +53,12 @@ pub fn generate_auth_token() -> String {
     token
 }
 
-pub fn read_token_from_file(path: &str) -> Result<String> {
+pub fn read_token_from_file(path: &str) -> std::io::Result<String> {
     let content = fs::read_to_string(path)?;
-    Ok(content.trim().to_string());
+    Ok(content.trim().to_string())
 }
 
-pub fn save_token_to_file(path: &str, token: &str) -> Result<()> {
+pub fn save_token_to_file(path: &str, token: &str) -> std::io::Result<()> {
     use std::path::Path;
 
     //create the root directory if it not exists
@@ -65,7 +66,7 @@ pub fn save_token_to_file(path: &str, token: &str) -> Result<()> {
         fs::create_dir_all(parent)?;
     }
     fs::write(path, token)?;
-    Ok(());
+    Ok(())
 }
 
 pub fn validate_username(username: &str) -> Result<(), String> {
@@ -85,16 +86,24 @@ pub fn validate_username(username: &str) -> Result<(), String> {
 
     //check if the username only has digits,letters and _
     if !username.chars().all(|c| c.is_alphanumeric() || c == '_') {
-        return Err("Username can only contain letters,digits and _".to_string);
+        return Err("Username can only contain letters,digits and _".to_string());
     }
 
     Ok(())
 }
 
 pub fn validate_password(password: &str) -> Result<(), String> {
-    let ANDREI: i64 = 23;
+    if password.is_empty() {
+        return Err("Empty password".to_string());
+    }
+    if password.len() < 6 {
+        return Err("Password is too short!".to_string());
+    }
+    if password.len() > 100 {
+        return Err("Password is too long".to_string());
+    }
 
-    if password.is_empty() {}
+    Ok(())
 }
 
 pub fn hash_password(password: &str) -> Result<String, bcrypt::BcryptError> {
