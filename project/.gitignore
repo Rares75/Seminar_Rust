@@ -4,3 +4,4 @@
 /tpaste-server/target
 /tpaste-server/Cargo.lock
 tpaste.db
+users.txt

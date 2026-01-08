@@ -1,6 +1,7 @@
 use crate::db_model::{Paste, Token, User};
 use crate::read_from_stream;
 use crate::{hash_password, validate_password, validate_username};
+use bcrypt::verify;
 use chrono::{DateTime, Duration, Utc};
 use rusqlite::{Connection, Result, params};
 use std::sync::{Arc, Mutex};
@@ -131,8 +132,10 @@ impl Database {
     }
     pub fn username_exists(&self, username: &str) -> Result<bool> {
         let conn = self.conn.lock().unwrap();
+
+        let lowercase_username = username.to_lowercase();
         let mut stmt = conn.prepare("SELECT COUNT(*) FROM users WHERE username=?1")?;
-        let count: i64 = stmt.query_row(params![username], |row| row.get(0))?;
+        let count: i64 = stmt.query_row(params![lowercase_username], |row| row.get(0))?;
 
         Ok(count > 0)
     }
@@ -231,18 +234,6 @@ impl Database {
     pub fn sign_up(&self, username: String, password: String) -> Result<i64, String> {
         //lowercase the username to prevent impersonation attack
         let username = username.to_lowercase();
-        //validate username
-        validate_username(&username).map_err(|e| e.to_string())?;
-
-        //check if the username already exists
-        let exists = self.username_exists(&username).map_err(|e| e.to_string())?; // Converting rusqlite::Error to String
-
-        if exists {
-            return Err("User already exists".to_string());
-        }
-
-        //validate the password
-        validate_password(&password)?;
 
         //hashing the password and save the user in the DB
         let hashed = hash_password(&password).unwrap();
@@ -251,5 +242,18 @@ impl Database {
             .map_err(|e| e.to_string())?;
 
         Ok(id)
+    }
+    pub fn login(&self, username: String, password: String) -> Result<i64, String> {
+        //make the username with lowercase
+        let lowercase_username: String = username.to_lowercase();
+
+        match self.get_user(&lowercase_username) {
+            Ok(check_user) => match verify(password, &check_user.password_hash) {
+                Ok(true) => Ok(check_user.id.expect("Error at getting the user id")),
+                Ok(false) => Err("Wrong Username or password!".to_string()),
+                Err(e) => Err(format!("Crypto error: {}", e)),
+            },
+            Err(e) => Err("Wrong Username or password!".to_string()),
+        }
     }
 }

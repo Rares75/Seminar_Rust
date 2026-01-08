@@ -103,7 +103,7 @@ pub fn validate_password(password: &str) -> Result<String, String> {
         return Err("Password is too long".to_string());
     }
 
-    Ok("Account created sucesfully");
+    Ok("Account created sucesfully".to_string())
 }
 
 pub fn hash_password(password: &str) -> Result<String, bcrypt::BcryptError> {

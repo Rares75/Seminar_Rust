@@ -49,13 +49,34 @@ fn handle_client(mut stream: TcpStream, db: Database) {
                 stream.write_all(b"Enter username: ").unwrap();
                 let mut username = read_from_stream(&mut stream);
                 loop {
+                    //check if the username is valid
                     if let Err(e) = validate_username(&username) {
                         stream
-                            .write_all(format!("Invalid username: {}. Try again.\n", e).as_bytes())
+                            .write_all(format!("Invalid format: {}. Try again.\n", e).as_bytes())
                             .unwrap();
                         username = read_from_stream(&mut stream);
-                    } else {
-                        break; //good username
+                        continue; //still in loop, until the username is valid
+                    }
+
+                    //check if the username already exists
+                    match db.username_exists(&username.to_lowercase()) {
+                        Ok(true) => {
+                            stream
+                                .write_all(b"Username already exists. Try again.\n")
+                                .unwrap();
+                            username = read_from_stream(&mut stream);
+                            continue;
+                        }
+                        Err(e) => {
+                            stream
+                                .write_all(
+                                    format!("Database error: {}. Try again.\n", e).as_bytes(),
+                                )
+                                .unwrap();
+                            username = read_from_stream(&mut stream);
+                            continue;
+                        }
+                        Ok(false) => break, //the username is good
                     }
                 }
 
@@ -89,7 +110,25 @@ fn handle_client(mut stream: TcpStream, db: Database) {
                 }
             }
             "login" => {
-                stream.write(b"login function will come soon");
+                //asking for username
+                stream.write_all(b"Enter username: ").unwrap();
+                let mut username = read_from_stream(&mut stream);
+
+                //asking for password
+                stream.write_all(b"Enter password: ").unwrap();
+                let mut password = read_from_stream(&mut stream);
+
+                match db.login(username, password) {
+                    Ok(id) => {
+                        authenticated_user_id = Some(id);
+                        connected = true;
+                        stream.write_all(b"Login successful!\n").unwrap();
+                    }
+                    Err(e) => {
+                        let error_response = format!("Error: {}\n", e);
+                        stream.write_all(error_response.as_bytes()).unwrap();
+                    }
+                }
             }
             "exit" => {
                 stream.write_all(b"Goodbye!").unwrap();
