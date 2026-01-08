@@ -1,8 +1,7 @@
-use chrono::{DateTime, Duration, Utc};
-use rusqlite::{Connection, Result, params};
+use rusqlite::Result;
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::Write;
-use std::fs;
+
 use std::hash::{Hash, Hasher};
 use std::iter;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -53,12 +52,12 @@ pub fn generate_auth_token() -> String {
     token
 }
 
-pub fn read_token_from_file(path: &str) -> std::io::Result<String> {
+/*pub fn read_token_from_file(path: &str) -> std::io::Result<String> {
     let content = fs::read_to_string(path)?;
     Ok(content.trim().to_string())
-}
+}*/
 
-pub fn save_token_to_file(path: &str, token: &str) -> std::io::Result<()> {
+/*pub fn save_token_to_file(path: &str, token: &str) -> std::io::Result<()> {
     use std::path::Path;
 
     // Create the parent directory if it does not exist
@@ -67,11 +66,9 @@ pub fn save_token_to_file(path: &str, token: &str) -> std::io::Result<()> {
     }
     fs::write(path, token)?;
     Ok(())
-}
+}*/
 
 pub fn validate_username(username: &str) -> Result<(), String> {
-    use std::ascii::AsciiExt;
-
     if username.is_empty() {
         return Err("Username cannot be empty".to_string());
     }

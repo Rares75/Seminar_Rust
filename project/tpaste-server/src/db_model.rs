@@ -1,4 +1,4 @@
-use chrono::{DateTime, Local, NaiveDateTime, Utc};
+use chrono::{DateTime, Utc};
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -18,6 +18,7 @@ pub struct Paste {
     pub created_at: DateTime<Utc>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Token {
     pub id: Option<i64>,

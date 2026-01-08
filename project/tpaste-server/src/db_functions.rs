@@ -1,19 +1,17 @@
-use crate::db_model::{Paste, Token, User};
+use crate::db_model::{Paste, User};
 
-use crate::{hash_password, validate_password, validate_username};
+use crate::hash_password;
 use bcrypt::verify;
 use chrono::{DateTime, Duration, Utc};
 use rusqlite::{Connection, Result, params};
-use std::io::Read;
-use std::net::{TcpListener, TcpStream};
+
 use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
-fn read_from_stream(stream: &mut TcpStream) -> String {
+
+/*fn read_from_stream(stream: &mut TcpStream) -> String {
     let mut buf = [0; 512];
     let n = stream.read(&mut buf).unwrap_or(0);
     String::from_utf8_lossy(&buf[..n]).trim().to_string()
-}
+}*/
 #[derive(Clone)]
 pub struct Database {
     conn: Arc<Mutex<Connection>>,
@@ -184,9 +182,8 @@ impl Database {
                 // Parse the expiration date
                 let expires_at = DateTime::parse_from_rfc3339(&expires_str)
                     .map(|dt| dt.with_timezone(&Utc))
-                    .map_err(|e| {
+                    .inspect_err(|&e| {
                         eprintln!("Error parsing date: {}", e);
-                        e
                     })
                     .ok();
 
@@ -246,13 +243,13 @@ impl Database {
     }
 
     // Check if a code already exists
-    pub fn code_exists(&self, code: &str) -> Result<bool> {
+    /*pub fn code_exists(&self, code: &str) -> Result<bool> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare("SELECT COUNT(*) FROM pastes WHERE code=?1")?;
         let count: i64 = stmt.query_row(params![code], |row| row.get(0))?;
 
         Ok(count > 0)
-    }
+    }*/
     pub fn sign_up(&self, username: String, password: String) -> Result<i64, String> {
         // Lowercase the username to prevent impersonation attack
         let username = username.to_lowercase();
@@ -275,7 +272,7 @@ impl Database {
                 Ok(false) => Err("Wrong username or password!".to_string()),
                 Err(e) => Err(format!("Crypto error: {}", e)),
             },
-            Err(e) => Err("Wrong username or password!".to_string()),
+            Err(_) => Err("Wrong username or password!".to_string()),
         }
     }
 }

@@ -1,14 +1,11 @@
 mod db_functions;
 mod db_model;
 mod helper_funcions;
-mod login;
-//mod sign_up;
 use crate::db_functions::Database;
-use crate::db_model::{Paste, Token, User};
-use crate::helper_funcions::{
-    generate_auth_token, generate_paste_code, hash_password, validate_password, validate_username,
-};
-use crate::login::login;
+use crate::helper_funcions::validate_password;
+
+use crate::helper_funcions::{generate_paste_code, hash_password, validate_username};
+
 //use crate::sign_up::sign_up;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -20,16 +17,11 @@ fn read_line(stream: &mut TcpStream) -> String {
     let mut buf = [0; 1];
 
     // reading byte by byte until we find endl
-    loop {
-        match stream.read_exact(&mut buf) {
-            Ok(_) => {
-                if buf[0] == b'\n' {
-                    break;
-                }
-                line.push(buf[0] as char);
-            }
-            Err(_) => break,
+    while stream.read_exact(&mut buf).is_ok() {
+        if buf[0] == b'\n' {
+            break;
         }
+        line.push(buf[0] as char);
     }
     line.trim().to_string()
 }
@@ -37,11 +29,10 @@ fn read_line(stream: &mut TcpStream) -> String {
 fn handle_client(mut stream: TcpStream, db: Database) {
     let mut authenticated_user_id: Option<i64> = None; // Remember the user ID for subsequent operations
     let mut connected: bool = false;
-    let mut command: String = String::new();
 
     // Make tpaste command unavailable until the user is logged in
     while !connected {
-        command = read_line(&mut stream);
+        let command = read_line(&mut stream);
         if command.is_empty() {
             break;
         } //closing connection
@@ -50,8 +41,8 @@ fn handle_client(mut stream: TcpStream, db: Database) {
         match command.as_str() {
             "sign_up" => {
                 // Request username and password
-                let mut username = read_line(&mut stream);
-                let mut password = read_line(&mut stream);
+                let username = read_line(&mut stream);
+                let password = read_line(&mut stream);
 
                 // Validate username
                 if let Err(e) = validate_username(&username) {
@@ -78,19 +69,23 @@ fn handle_client(mut stream: TcpStream, db: Database) {
                     continue;
                 }
 
-                // Insert the new user in the database
-                match db.sign_up(username, password) {
-                    Ok(id) => {
-                        authenticated_user_id = Some(id);
-                        connected = true;
-                        stream
-                            .write_all(b"OK: Account created and logged in.\n")
-                            .unwrap();
-                    }
+                match validate_password(&password) {
+                    // Insert the new user in the database
+                    Ok(message) => match db.sign_up(username, password) {
+                        Ok(id) => {
+                            authenticated_user_id = Some(id);
+                            connected = true;
+                            let _ = stream.write(message.as_bytes());
+                        }
+                        Err(e) => {
+                            stream
+                                .write_all(format!("ERR: Signup failed: {}\n", e).as_bytes())
+                                .unwrap();
+                        }
+                    },
                     Err(e) => {
-                        stream
-                            .write_all(format!("ERR: Signup failed: {}\n", e).as_bytes())
-                            .unwrap();
+                        let response = format!("Err: {}\n, Sign_up failed.", e);
+                        stream.write_all(response.as_bytes()).unwrap();
                     }
                 }
             }
@@ -146,13 +141,12 @@ fn handle_client(mut stream: TcpStream, db: Database) {
         }
     }
     loop {
-        command = read_line(&mut stream);
+        let command = read_line(&mut stream);
         let executable_command = command.trim();
-        let mut content = String::from("");
         if executable_command.is_empty() {
-            stream.write_all(b"you enterd an empty command, try to use help");
+            let _ = stream.write_all(b"you enterd an empty command, try to use help");
         } else {
-            executable_command.trim();
+            let _ = executable_command.trim();
             if executable_command.ends_with("| tpaste") {
                 let cmd_to_run = executable_command
                     .replace("| tpaste", "")
@@ -164,10 +158,10 @@ fn handle_client(mut stream: TcpStream, db: Database) {
                         //combine stdin and stderr to save everything the command has shown
                         let stdout = String::from_utf8_lossy(&output.stdout);
                         let stderr = String::from_utf8_lossy(&output.stderr);
-                        content = format!("{}{}", stdout, stderr);
+                        let content = format!("{}{}", stdout, stderr);
 
                         if content.trim().is_empty() {
-                            stream.write_all(
+                            let _ = stream.write_all(
                                 b"Command was executed but it didn't produce any output",
                             );
                         } else {
@@ -176,7 +170,10 @@ fn handle_client(mut stream: TcpStream, db: Database) {
                             match db.create_paste(&authenticated_user_id.unwrap(), &code, &content)
                             {
                                 Ok(id) => {
-                                    let message = format!("Message saved with code: {}", code);
+                                    let message = format!(
+                                        "Message saved with code: {},your user id: {}",
+                                        code, id
+                                    );
                                     stream.write_all(message.as_bytes()).unwrap();
                                 }
                                 Err(e) => {
@@ -211,12 +208,17 @@ fn handle_client(mut stream: TcpStream, db: Database) {
                             stream.write_all(response.as_bytes()).unwrap()
                         }
                         Err(e) => {
-                            stream.write_all(b"The author of this paste doesn't exist anymore\n");
+                            let response = format!(
+                                "ERR:{}:The author of this paste doesn't exist anymore,\n",
+                                e
+                            );
+                            stream.write_all(response.as_bytes()).unwrap();
                         }
                     }
                 }
                 Err(e) => {
-                    stream.write_all(b"Err:Your provided code doesn't exist\n");
+                    let respone = format!("Err: {},Your provided code doesn't exist\n", e);
+                    stream.write_all(respone.as_bytes()).unwrap();
                 }
             }
         }

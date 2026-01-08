@@ -1,4 +1,4 @@
-use std::io::{self, IsTerminal, Read, Write, stdin, stdout};
+use std::io::{IsTerminal, Read, Write, stdin, stdout};
 use std::net::TcpStream;
 
 fn handle_auth(stream: &mut TcpStream, cmd_type: &str) {
@@ -22,19 +22,19 @@ fn handle_auth(stream: &mut TcpStream, cmd_type: &str) {
 
 fn read_server_response(stream: &mut TcpStream) {
     let mut buffer = [0; 4096];
-    if let Ok(n) = stream.read(&mut buffer) {
-        if n > 0 {
-            let response = String::from_utf8_lossy(&buffer[..n]);
-            println!("{}", response);
+    if let Ok(n) = stream.read(&mut buffer)
+        && n > 0
+    {
+        let response = String::from_utf8_lossy(&buffer[..n]);
+        println!("{}", response);
 
-            // If the server sent us a token, save it
-            if response.contains("TOKEN:") {
-                if let Some(token) = response.split("TOKEN:").nth(1) {
-                    let clean_token = token.trim();
-                    std::fs::write(".tpaste_token", clean_token).expect("Failed to save token");
-                    println!("Session saved locally.");
-                }
-            }
+        // If the server sent us a token, save it
+        if response.contains("TOKEN:")
+            && let Some(token) = response.split("TOKEN:").nth(1)
+        {
+            let clean_token = token.trim();
+            std::fs::write(".tpaste_token", clean_token).expect("Failed to save token");
+            println!("Session saved locally.");
         }
     }
 }
@@ -55,20 +55,20 @@ fn main() {
         }
         return;
     }
-    if std::path::Path::new(".tpaste_token").exists() {
-        if let Ok(token) = std::fs::read_to_string(".tpaste_token") {
-            let payload = format!("token\n{}\n", token.trim());
-            stream.write_all(payload.as_bytes()).unwrap();
+    if std::path::Path::new(".tpaste_token").exists()
+        && let Ok(token) = std::fs::read_to_string(".tpaste_token")
+    {
+        let payload = format!("token\n{}\n", token.trim());
+        stream.write_all(payload.as_bytes()).unwrap();
 
-            // Read the response to check if we succeeded
-            let mut buf = [0; 512];
-            if let Ok(n) = stream.read(&mut buf) {
-                let res = String::from_utf8_lossy(&buf[..n]);
-                if res.contains("OK:") {
-                    println!("Automatically logged in via token.");
-                } else {
-                    println!("Token expired. Please log in manually.");
-                }
+        // Read the response to check if we succeeded
+        let mut buf = [0; 512];
+        if let Ok(n) = stream.read(&mut buf) {
+            let res = String::from_utf8_lossy(&buf[..n]);
+            if res.contains("OK:") {
+                println!("Automatically logged in via token.");
+            } else {
+                println!("Token expired. Please log in manually.");
             }
         }
     }
