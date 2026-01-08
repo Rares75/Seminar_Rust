@@ -12,6 +12,7 @@ use crate::login::login;
 //use crate::sign_up::sign_up;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::process::Command;
 use std::thread;
 
 fn read_line(stream: &mut TcpStream) -> String {
@@ -122,9 +123,95 @@ fn handle_client(mut stream: TcpStream, db: Database) {
             }
         }
     }
+    /*loop {
+        command = read_line(&mut stream);
+        let executable_command = command.trim();
+        let mut content = String::from("");
+        if executable_command.is_empty() {
+            stream.write_all(b"you enterd an empty command, try to use help");
+        } else {
+            executable_command.trim();
+            if executable_command.ends_with("| tpaste") {
+                let cmd_to_run = executable_command
+                    .replace("| tpaste", "")
+                    .trim()
+                    .to_string();
+
+                match Command::new("sh").arg("-c").arg(&cmd_to_run).output() {
+                    Ok(output) => {
+                        //combine stdin and stderr to save everything the command has shown
+                        let stdout = String::from_utf8_lossy(&output.stdout);
+                        let stderr = String::from_utf8_lossy(&output.stderr);
+                        content = format!("{}{}", stdout, stderr);
+
+                        if content.trim().is_empty() {
+                            stream.write_all(
+                                b"Command was executed but it didn't produce any output",
+                            );
+                        } else {
+                            let code = generate_paste_code();
+
+                            match db.create_paste(&authenticated_user_id.unwrap(), &code, &content)
+                            {
+                                Ok(id) => {
+                                    let message = format!("Message saved with code: {}", code);
+                                    stream.write_all(message.as_bytes()).unwrap();
+                                }
+                                Err(e) => {
+                                    let err_msg = format! {"Err:Something went wrong\n {}",e};
+                                    stream.write_all(err_msg.as_bytes()).unwrap();
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let err_msg = format!("ERR: Failed to execute command: {}\n", e);
+                        stream.write_all(err_msg.as_bytes()).unwrap();
+                    }
+                }
+            }
+        }
+    }*/
     loop {
-        stream.write_all(b"you are now connected, rest of the commands will come soon...");
-        break;
+        let command = read_line(&mut stream);
+        let executable_command = command.trim();
+
+        if executable_command.is_empty() {
+            continue;
+        }
+
+        if executable_command.contains("| tpaste") {
+            let cmd_to_run = executable_command
+                .replace("| tpaste", "")
+                .trim()
+                .to_string();
+
+            match Command::new("sh").arg("-c").arg(&cmd_to_run).output() {
+                Ok(output) => {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    let content = format!("{}{}", stdout, stderr);
+
+                    if content.trim().is_empty() {
+                        let _ = stream.write_all(b"ERR: Comanda nu a produs niciun output.\n");
+                    } else {
+                        let code = generate_paste_code();
+                        match db.create_paste(&authenticated_user_id.unwrap(), &code, &content) {
+                            Ok(_) => {
+                                let msg = format!("SUCCESS: Paste generat! Cod: link:{}\n", code);
+                                let _ = stream.write_all(msg.as_bytes());
+                            }
+                            Err(e) => {
+                                let _ = stream.write_all(format!("ERR DB: {}\n", e).as_bytes());
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    let _ = stream.write_all(format!("ERR EXEC: {}\n", e).as_bytes());
+                }
+            }
+        }
     }
 }
 fn main() {

@@ -195,7 +195,7 @@ impl Database {
     }
 
     //paste table operations
-    pub fn create_paste(&self, user_id: i64, code: &str, content: &str) -> Result<i64> {
+    pub fn create_paste(&self, user_id: &i64, code: &str, content: &str) -> Result<i64> {
         let created_at = Utc::now().to_rfc3339();
         let conn = self.conn.lock().unwrap();
         conn.execute(
