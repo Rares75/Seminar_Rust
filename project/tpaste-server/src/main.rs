@@ -141,7 +141,7 @@ fn handle_client(mut stream: TcpStream, db: Database) {
         }
     }
     let message = "you are logged in,now you have accest to tpaste server";
-    stream.write(message.as_bytes()).unwrap();
+    stream.write_all(message.as_bytes()).unwrap();
     loop {
         let command = read_line(&mut stream);
         let executable_command = command.trim();
