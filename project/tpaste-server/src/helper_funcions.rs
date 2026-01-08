@@ -92,7 +92,7 @@ pub fn validate_username(username: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub fn validate_password(password: &str) -> Result<(), String> {
+pub fn validate_password(password: &str) -> Result<String, String> {
     if password.is_empty() {
         return Err("Empty password".to_string());
     }
@@ -103,7 +103,7 @@ pub fn validate_password(password: &str) -> Result<(), String> {
         return Err("Password is too long".to_string());
     }
 
-    Ok(())
+    Ok("Account created sucesfully");
 }
 
 pub fn hash_password(password: &str) -> Result<String, bcrypt::BcryptError> {

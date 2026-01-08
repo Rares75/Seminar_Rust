@@ -11,12 +11,5 @@ fn check_password(password: String) -> bool {
 }
 pub fn login(username: String, password: String) {
     //Result<(), String> {
-    println! {"enter login function for: {}",username};
-    /*  if check_username(username) && check_password(password) {
-        Ok(())
-    } else {
-        Err(String::from(
-            "username or password aren't correct, please try again",
-        ))
-    }*/
+    println! {"enter login function/n username recived: {}, and password recived: {}",username,password};
 }

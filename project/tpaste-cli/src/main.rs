@@ -1,39 +1,43 @@
-use std::io::{Read, Write, stdin};
+use std::io::{self, Read, Write, stdin, stdout};
 use std::net::TcpStream;
 
 fn main() {
     //connect
-    let mut stream = TcpStream::connect("127.0.0.1:8080").unwrap();
+    let mut stream = TcpStream::connect("127.0.0.1:8080").expect("connection refused");
 
     // Read welcome message from server
     let mut buffer = [0; 512];
-    match stream.read(&mut buffer) {
-        Ok(n) => {
-            let message = String::from_utf8_lossy(&buffer[..n]);
-            println!("{}", message);
+    let mut message: String = String::new();
+
+    loop {
+        //read the message from server
+        match stream.read(&mut buffer) {
+            Ok(0) => {
+                println!("The server closed the connection.");
+                break;
+            }
+            Ok(n) => {
+                message = String::from_utf8_lossy(&buffer[..n]).to_string();
+                io::stdout().flush().unwrap();
+            }
+            Err(e) => {
+                eprintln!("Error reading from server: {}", e);
+                break;
+            }
         }
-        Err(e) => eprintln!("Error reading from server: {}", e),
-    }
+        //printing the message
+        println! {"{}",message};
+        message.clear();
 
-    // Send username to server
-    let mut username = String::new();
-    println!("Enter username: ");
-    match stdin().read_line(&mut username) {
-        Ok(_) => match stream.write_all(username.as_bytes()) {
-            Ok(_) => println!("Username sent"),
-            Err(e) => eprintln!("Error sending username: {}", e),
-        },
-        Err(e) => eprintln!("Error reading username: {}", e),
-    }
+        //reading the new command for the server
+        stdin()
+            .read_line(&mut message)
+            .expect("Error at reading your message");
 
-    // Send password to server
-    let mut password = String::new();
-    println!("Enter password: ");
-    match stdin().read_line(&mut password) {
-        Ok(_) => match stream.write_all(password.as_bytes()) {
-            Ok(_) => println!("Password sent"),
-            Err(e) => eprintln!("Error sending password: {}", e),
-        },
-        Err(e) => eprintln!("Error reading password: {}", e),
+        //sending the command to the server
+        if let Err(e) = stream.write_all(message.as_bytes()) {
+            eprintln!("Eroare la trimitere: {}", e);
+            break;
+        }
     }
 }
