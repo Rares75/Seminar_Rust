@@ -14,119 +14,99 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::thread;
 
-fn read_from_stream(stream: &mut TcpStream) -> String {
-    let mut buf = [0; 512];
-    let n = stream.read(&mut buf).unwrap_or(0);
-    String::from_utf8_lossy(&buf[..n]).trim().to_string()
+fn read_line(stream: &mut TcpStream) -> String {
+    let mut line = String::new();
+    let mut buf = [0; 1];
+
+    // reading byte by byte until we find endl
+    loop {
+        match stream.read_exact(&mut buf) {
+            Ok(_) => {
+                if buf[0] == b'\n' {
+                    break;
+                }
+                line.push(buf[0] as char);
+            }
+            Err(_) => break,
+        }
+    }
+    line.trim().to_string()
 }
 
 fn handle_client(mut stream: TcpStream, db: Database) {
-    let mut buffer = [0; 512];
     let mut authenticated_user_id: Option<i64> = None; //remembering the user id for the rest of the functions
     let mut connected: bool = false;
     let mut command: String = String::new();
 
-    stream.write_all(b"Welcome to the Tpaste web server, before we start plese login using login command\n If you don't have an account please use sign_up command\n If you want to quit just use exit command\n");
-
     //making the tpaste command unavailable until the user is logged in
     while !connected {
-        buffer.fill(0);
-        let n = match stream.read(&mut buffer) {
-            Ok(0) => break, //client closed the connection
-            Ok(n) => n,
-            Err(e) => {
-                eprintln!("{}", e);
-                break;
-            }
-        };
-
-        command = String::from_utf8_lossy(&buffer[..n]).trim().to_string();
+        command = read_line(&mut stream);
+        if command.is_empty() {
+            break;
+        } //closing connection
 
         //processing the command
         match command.as_str() {
             "sign_up" => {
                 //asking for the username and password
-                stream.write_all(b"Enter username: ").unwrap();
-                let mut username = read_from_stream(&mut stream);
-                loop {
-                    //check if the username is valid
-                    if let Err(e) = validate_username(&username) {
-                        stream
-                            .write_all(format!("Invalid format: {}. Try again.\n", e).as_bytes())
-                            .unwrap();
-                        username = read_from_stream(&mut stream);
-                        continue; //still in loop, until the username is valid
-                    }
+                let mut username = read_line(&mut stream);
+                let mut password = read_line(&mut stream);
 
-                    //check if the username already exists
-                    match db.username_exists(&username.to_lowercase()) {
-                        Ok(true) => {
-                            stream
-                                .write_all(b"Username already exists. Try again.\n")
-                                .unwrap();
-                            username = read_from_stream(&mut stream);
-                            continue;
-                        }
-                        Err(e) => {
-                            stream
-                                .write_all(
-                                    format!("Database error: {}. Try again.\n", e).as_bytes(),
-                                )
-                                .unwrap();
-                            username = read_from_stream(&mut stream);
-                            continue;
-                        }
-                        Ok(false) => break, //the username is good
+                //validate username
+                if let Err(e) = validate_username(&username) {
+                    stream
+                        .write_all(format!("ERR: Username invalid: {}\n", e).as_bytes())
+                        .unwrap();
+
+                    continue;
+                }
+                // check if the username already exists
+                let exists = match db.username_exists(&username) {
+                    Ok(true) => true,
+                    Ok(false) => false,
+                    Err(e) => {
+                        stream
+                            .write_all(format!("ERR: DB error: {}\n", e).as_bytes())
+                            .unwrap();
+                        continue;
                     }
+                };
+
+                if exists {
+                    stream.write_all(b"ERR: Username already exists\n").unwrap();
+                    continue;
                 }
 
-                stream.write_all(b"Enter password: ").unwrap();
-                let mut password = read_from_stream(&mut stream);
-                loop {
-                    if let Err(e) = validate_password(&password) {
-                        stream
-                            .write_all(format!("Invalid password: {}. Try again.\n", e).as_bytes())
-                            .unwrap();
-                        password = read_from_stream(&mut stream);
-                    } else {
-                        break; //good password
-                    }
-                }
+                // insert the new user in the DB
                 match db.sign_up(username, password) {
                     Ok(id) => {
-                        buffer.fill(0);
-                        stream.write_all(b"would you like to generate a token? y/n");
-                        buffer.fill(0);
-                        let n = stream.read(&mut buffer).unwrap();
-                        let answear = String::from_utf8_lossy(&buffer[..n]).trim().to_string();
-                        println! {"the answear is: {}",answear};
                         authenticated_user_id = Some(id);
                         connected = true;
+                        stream
+                            .write_all(b"OK: Account created and logged in.\n")
+                            .unwrap();
                     }
                     Err(e) => {
-                        stream.write_all(e.as_bytes()).unwrap();
-                        stream.write_all(b"\n").unwrap();
+                        stream
+                            .write_all(format!("ERR: Signup failed: {}\n", e).as_bytes())
+                            .unwrap();
                     }
                 }
             }
             "login" => {
-                //asking for username
-                stream.write_all(b"Enter username: ").unwrap();
-                let mut username = read_from_stream(&mut stream);
-
-                //asking for password
-                stream.write_all(b"Enter password: ").unwrap();
-                let mut password = read_from_stream(&mut stream);
+                let username = read_line(&mut stream);
+                let password = read_line(&mut stream);
 
                 match db.login(username, password) {
                     Ok(id) => {
                         authenticated_user_id = Some(id);
                         connected = true;
-                        stream.write_all(b"Login successful!\n").unwrap();
+                        stream.write_all(b"OK: Login successful!\n").unwrap();
                     }
                     Err(e) => {
-                        let error_response = format!("Error: {}\n", e);
-                        stream.write_all(error_response.as_bytes()).unwrap();
+                        stream
+                            .write_all(format!("ERR: Login failed: {}\n", e).as_bytes())
+                            .unwrap();
                     }
                 }
             }

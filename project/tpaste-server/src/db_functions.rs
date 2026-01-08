@@ -1,12 +1,19 @@
 use crate::db_model::{Paste, Token, User};
-use crate::read_from_stream;
+
 use crate::{hash_password, validate_password, validate_username};
 use bcrypt::verify;
 use chrono::{DateTime, Duration, Utc};
 use rusqlite::{Connection, Result, params};
+use std::io::Read;
+use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
+fn read_from_stream(stream: &mut TcpStream) -> String {
+    let mut buf = [0; 512];
+    let n = stream.read(&mut buf).unwrap_or(0);
+    String::from_utf8_lossy(&buf[..n]).trim().to_string()
+}
 #[derive(Clone)]
 pub struct Database {
     conn: Arc<Mutex<Connection>>,
