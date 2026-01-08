@@ -35,25 +35,25 @@ fn read_line(stream: &mut TcpStream) -> String {
 }
 
 fn handle_client(mut stream: TcpStream, db: Database) {
-    let mut authenticated_user_id: Option<i64> = None; //remembering the user id for the rest of the functions
+    let mut authenticated_user_id: Option<i64> = None; // Remember the user ID for subsequent operations
     let mut connected: bool = false;
     let mut command: String = String::new();
 
-    //making the tpaste command unavailable until the user is logged in
+    // Make tpaste command unavailable until the user is logged in
     while !connected {
         command = read_line(&mut stream);
         if command.is_empty() {
             break;
         } //closing connection
 
-        //processing the command
+        // Process the command
         match command.as_str() {
             "sign_up" => {
-                //asking for the username and password
+                // Request username and password
                 let mut username = read_line(&mut stream);
                 let mut password = read_line(&mut stream);
 
-                //validate username
+                // Validate username
                 if let Err(e) = validate_username(&username) {
                     stream
                         .write_all(format!("ERR: Username invalid: {}\n", e).as_bytes())
@@ -61,7 +61,7 @@ fn handle_client(mut stream: TcpStream, db: Database) {
 
                     continue;
                 }
-                // check if the username already exists
+                // Check if the username already exists
                 let exists = match db.username_exists(&username) {
                     Ok(true) => true,
                     Ok(false) => false,
@@ -78,7 +78,7 @@ fn handle_client(mut stream: TcpStream, db: Database) {
                     continue;
                 }
 
-                // insert the new user in the DB
+                // Insert the new user in the database
                 match db.sign_up(username, password) {
                     Ok(id) => {
                         authenticated_user_id = Some(id);
@@ -103,11 +103,11 @@ fn handle_client(mut stream: TcpStream, db: Database) {
                         authenticated_user_id = Some(id);
                         connected = true;
 
-                        // GENERARE TOKEN NOU
+                        // Generate a new token
                         let new_token = helper_funcions::generate_auth_token();
                         db.create_token(id, &new_token).unwrap();
 
-                        // Trimitem mesajul cu formatul pe care clientul îl așteaptă: "TOKEN:..."
+                        // Send message with the format the client expects: "TOKEN:..."
                         let success_msg = format!("OK: Login successful! TOKEN:{}\n", new_token);
                         stream.write_all(success_msg.as_bytes()).unwrap();
                     }
@@ -125,20 +125,20 @@ fn handle_client(mut stream: TcpStream, db: Database) {
                 match db.validate_token(token) {
                     Ok(Some(id)) => {
                         authenticated_user_id = Some(id);
-                        connected = true; // Aceasta va opri bucla while și va trece la loop-ul următor
+                        connected = true; // This will exit the while loop and enter the next loop
                         let _ = stream.write_all(b"OK: Welcome back via token!\n");
                     }
                     _ => {
-                        let _ = stream.write_all(b"ERR: Token invalid sau expirat.\n");
+                        let _ = stream.write_all(b"ERR: Token invalid or expired.\n");
                     }
                 }
             }
             "exit" => {
                 stream.write_all(b"Goodbye!").unwrap();
-                break; //closing the connection
+                break; // Close the connection
             }
             other => {
-                eprintln! {"the user tried to use {} command", other};
+                eprintln!("User tried to use {} command", other);
                 stream
                     .write_all(b"Unknown command. Try 'sign_up' or 'login'.\n")
                     .unwrap();
@@ -223,17 +223,17 @@ fn handle_client(mut stream: TcpStream, db: Database) {
     }
 }
 fn main() {
-    let db = Database::new("tpaste.db").expect("Error:can not create the DB");
+    let db = Database::new("tpaste.db").expect("Error: cannot create the database");
 
-    //socket+bind+listen()
+    // Create socket, bind, and listen
     let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
-    println! {"server started"};
-    // accept
+    println!("Server started");
+    // Accept incoming connections
     for stream in listener.incoming() {
         let db_client = db.clone();
         match stream {
             Ok(stream) => {
-                // concurrent server with Threads
+                // Concurrent server using threads
                 thread::spawn(move || {
                     handle_client(stream, db_client);
                 });

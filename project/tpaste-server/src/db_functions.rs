@@ -20,7 +20,7 @@ pub struct Database {
 }
 
 impl Database {
-    //open or create the DB
+    // Open or create the database
     pub fn new(path: &str) -> Result<Self, rusqlite::Error> {
         let file = Connection::open(path)?;
         let db = Database {
@@ -29,10 +29,10 @@ impl Database {
         db.create_tables()?;
         Ok(db)
     }
-    //creating necessary tables
+    // Create necessary tables
 
     fn create_tables(&self) -> Result<()> {
-        //user tables
+        // Users table
         let conn = self.conn.lock().unwrap();
         conn.execute(
             "CREATE TABLE IF NOT EXISTS users(
@@ -41,7 +41,7 @@ impl Database {
         password_hash TEXT NOT NULL,
         created_at TEXT NOT NULL
       )",
-            [], //specific for SQLite, this means we don't have any parameters to insert in DB
+            [], // Specific for SQLite, no parameters to insert
         )?;
         //Paste table
         conn.execute(
@@ -55,13 +55,13 @@ impl Database {
             ",
             [],
         )?;
-        //creating index in code(Paste) for fast search in DB
+        // Create index on code (Paste) for fast database search
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_pastes_code ON pastes(code)",
             [],
         )?;
 
-        //Token table
+        // Token table
         conn.execute(
             "CREATE TABLE IF NOT EXISTS tokens(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,7 +72,7 @@ impl Database {
             FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
             [],
         )?;
-        //creating index in token(TOKEN) for fast seacth in DB
+        // Create index on token for fast database search
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_tokens_token ON tokens(token)",
             [],
@@ -80,9 +80,9 @@ impl Database {
 
         Ok(())
     }
-    //User table operations
+    // User table operations
 
-    //creating a new user
+    // Create a new user
     pub fn create_user(&self, username: &str, password_hash: &str) -> Result<i64> {
         let created_at = Utc::now().to_rfc3339();
         let conn = self.conn.lock().unwrap();
@@ -93,7 +93,7 @@ impl Database {
         Ok(conn.last_insert_rowid())
     }
 
-    //finding a user
+    // Find a user
     pub fn get_user(&self, username: &str) -> Result<User> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
@@ -116,6 +116,7 @@ impl Database {
         Ok(user)
     }
 
+    // Get user by ID
     pub fn get_user_id(&self, user_id: i64) -> Result<User> {
         let conn = self.conn.lock().unwrap();
         let mut stmt =
@@ -166,14 +167,13 @@ impl Database {
         Ok(conn.last_insert_rowid())
     }
 
-    //validate a token
+    // Validate a token
     pub fn validate_token(&self, token: &str) -> Result<Option<i64>> {
         let conn = self.conn.lock().unwrap();
-        // 1. Corectează SQL-ul: tabelul "tokens" (cum l-ai creat) și clauza WHERE
         let mut stmt = conn.prepare("SELECT user_id, expires_at FROM tokens WHERE token = ?1")?;
 
         let result = stmt.query_row(params![token.trim()], |row| {
-            // Trim aici pentru siguranță
+            // Trim for safety
             let user_id: i64 = row.get(0)?;
             let expires_str: String = row.get(1)?;
             Ok((user_id, expires_str))
@@ -181,18 +181,18 @@ impl Database {
 
         match result {
             Ok((user_id, expires_str)) => {
-                // 2. Parsarea datei cu detectarea erorilor
+                // Parse the expiration date
                 let expires_at = DateTime::parse_from_rfc3339(&expires_str)
                     .map(|dt| dt.with_timezone(&Utc))
                     .map_err(|e| {
-                        eprintln!("Eroare parsare data: {}", e);
+                        eprintln!("Error parsing date: {}", e);
                         e
                     })
                     .ok();
 
                 if let Some(expiry) = expires_at {
                     if Utc::now() > expiry {
-                        println!("Token expirat pentru user {}", user_id);
+                        println!("Token expired for user {}", user_id);
                         Ok(None)
                     } else {
                         Ok(Some(user_id))
@@ -202,14 +202,14 @@ impl Database {
                 }
             }
             Err(e) => {
-                // Dacă ajungem aici, probabil token-ul nu a fost găsit în DB
-                println!("Token-ul nu a fost găsit în DB: {}", e);
+                // If we reach here, the token was probably not found in the database
+                println!("Token not found in database: {}", e);
                 Ok(None)
             }
         }
     }
 
-    //paste table operations
+    // Paste table operations
     pub fn create_paste(&self, user_id: &i64, code: &str, content: &str) -> Result<i64> {
         let created_at = Utc::now().to_rfc3339();
         let conn = self.conn.lock().unwrap();
@@ -221,7 +221,7 @@ impl Database {
         Ok(conn.last_insert_rowid())
     }
 
-    //getting the paste by code
+    // Get paste by code
     pub fn get_paste_by_code(&self, code: &str) -> Result<Paste> {
         let conn = self.conn.lock().unwrap();
         let mut stmt =
@@ -245,7 +245,7 @@ impl Database {
         Ok(paste)
     }
 
-    //check if a code already exists
+    // Check if a code already exists
     pub fn code_exists(&self, code: &str) -> Result<bool> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare("SELECT COUNT(*) FROM pastes WHERE code=?1")?;
@@ -254,10 +254,10 @@ impl Database {
         Ok(count > 0)
     }
     pub fn sign_up(&self, username: String, password: String) -> Result<i64, String> {
-        //lowercase the username to prevent impersonation attack
+        // Lowercase the username to prevent impersonation attack
         let username = username.to_lowercase();
 
-        //hashing the password and save the user in the DB
+        // Hash the password and save the user in the database
         let hashed = hash_password(&password).unwrap();
         let id: i64 = self
             .create_user(&username, &hashed)
@@ -266,16 +266,16 @@ impl Database {
         Ok(id)
     }
     pub fn login(&self, username: String, password: String) -> Result<i64, String> {
-        //make the username with lowercase
+        // Convert username to lowercase
         let lowercase_username: String = username.to_lowercase();
 
         match self.get_user(&lowercase_username) {
             Ok(check_user) => match verify(password, &check_user.password_hash) {
-                Ok(true) => Ok(check_user.id.expect("Error at getting the user id")),
-                Ok(false) => Err("Wrong Username or password!".to_string()),
+                Ok(true) => Ok(check_user.id.expect("Error getting user ID")),
+                Ok(false) => Err("Wrong username or password!".to_string()),
                 Err(e) => Err(format!("Crypto error: {}", e)),
             },
-            Err(e) => Err("Wrong Username or password!".to_string()),
+            Err(e) => Err("Wrong username or password!".to_string()),
         }
     }
 }

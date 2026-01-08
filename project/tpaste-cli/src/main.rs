@@ -13,7 +13,7 @@ fn handle_auth(stream: &mut TcpStream, cmd_type: &str) {
     stdout().flush().unwrap();
     stdin().read_line(&mut password).unwrap();
 
-    // Trimitem: comanda\nusername\nparola\n
+    // Send: command\nusername\npassword\n
     let payload = format!("{}\n{}\n{}\n", cmd_type, username.trim(), password.trim());
     stream.write_all(payload.as_bytes()).unwrap();
 
@@ -27,13 +27,12 @@ fn read_server_response(stream: &mut TcpStream) {
             let response = String::from_utf8_lossy(&buffer[..n]);
             println!("{}", response);
 
-            // Dacă serverul ne-a trimis un token, îl salvăm
+            // If the server sent us a token, save it
             if response.contains("TOKEN:") {
                 if let Some(token) = response.split("TOKEN:").nth(1) {
                     let clean_token = token.trim();
-                    std::fs::write(".tpaste_token", clean_token)
-                        .expect("Nu am putut salva token-ul");
-                    println!("Sesiune salvata local.");
+                    std::fs::write(".tpaste_token", clean_token).expect("Failed to save token");
+                    println!("Session saved locally.");
                 }
             }
         }
@@ -43,12 +42,12 @@ fn read_server_response(stream: &mut TcpStream) {
 fn main() {
     let mut stream = TcpStream::connect("127.0.0.1:8080").expect("Connection refused");
     println!("Connected to tpaste server. Type 'help' for commands.");
-    // 1. GESTIONARE PIPE (Ex: cat file | tpaste)
+    // 1. HANDLE PIPE INPUT (Ex: cat file | tpaste)
     if !stdin().is_terminal() {
         let mut buffer = String::new();
         if stdin().read_to_string(&mut buffer).is_ok() {
-            // Dacă e pipe, trimitem direct conținutul ca o comandă de tip tpaste
-            // (Presupunând că serverul știe să identifice acest flux)
+            // If input is piped, send it directly as a tpaste command
+            // (Assuming the server knows how to identify this flow)
             stream
                 .write_all(format!("{} | tpaste\n", buffer.trim()).as_bytes())
                 .unwrap();
@@ -61,14 +60,14 @@ fn main() {
             let payload = format!("token\n{}\n", token.trim());
             stream.write_all(payload.as_bytes()).unwrap();
 
-            // Citim răspunsul să vedem dacă am reușit
+            // Read the response to check if we succeeded
             let mut buf = [0; 512];
             if let Ok(n) = stream.read(&mut buf) {
                 let res = String::from_utf8_lossy(&buf[..n]);
                 if res.contains("OK:") {
-                    println!("Logat automat prin token.");
+                    println!("Automatically logged in via token.");
                 } else {
-                    println!("Token-ul a expirat. Te rugam sa te loghezi manual.");
+                    println!("Token expired. Please log in manually.");
                 }
             }
         }
@@ -89,11 +88,11 @@ fn main() {
         }
 
         match command {
-            // Cazurile speciale unde clientul ajută la introducerea datelor
+            // Special cases where the client helps with data input
             "login" | "sign_up" => handle_auth(&mut stream, command),
 
-            // Orice altceva (ls, link:abc, pwd, echo "hi" | tpaste)
-            // Trimitem exact ce a scris utilizatorul la server
+            // Anything else (ls, link:abc, pwd, echo "hi" | tpaste)
+            // Send exactly what the user typed to the server
             _ => {
                 stream
                     .write_all(format!("{}\n", command).as_bytes())
