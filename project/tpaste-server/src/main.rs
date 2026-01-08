@@ -140,6 +140,8 @@ fn handle_client(mut stream: TcpStream, db: Database) {
             }
         }
     }
+    let message = "you are logged in,now you have accest to tpaste server";
+    stream.write(message.as_bytes()).unwrap();
     loop {
         let command = read_line(&mut stream);
         let executable_command = command.trim();
@@ -221,6 +223,15 @@ fn handle_client(mut stream: TcpStream, db: Database) {
                     stream.write_all(respone.as_bytes()).unwrap();
                 }
             }
+        }
+        if executable_command.contains("exit") {
+            stream.write_all(b"Goodbye!").unwrap();
+            break; // Close the connection
+        }
+        if executable_command.contains("help") {
+            stream
+                .write_all(b"Availble commands are link:code, and | tpaste")
+                .unwrap();
         }
     }
 }
