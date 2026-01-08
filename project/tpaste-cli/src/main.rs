@@ -36,7 +36,7 @@ fn handle_auth(stream: &mut TcpStream, cmd_type: &str) {
 
 fn main() {
     let mut stream = TcpStream::connect("127.0.0.1:8080").expect("Connection refused");
-
+    println!("Connected to tpaste server. Type 'help' for commands.");
     // 1. GESTIONARE PIPE (Ex: cat file | tpaste)
     if !stdin().is_terminal() {
         let mut buffer = String::new();
@@ -50,8 +50,6 @@ fn main() {
         }
         return;
     }
-
-    println!("TPaste Remote Shell Connected.");
 
     loop {
         print!("tpaste> ");

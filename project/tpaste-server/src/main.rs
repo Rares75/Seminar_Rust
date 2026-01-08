@@ -171,48 +171,34 @@ fn handle_client(mut stream: TcpStream, db: Database) {
                 }
             }
         }
-    }
-    /*loop {
-        let command = read_line(&mut stream);
-        let executable_command = command.trim();
-
-        if executable_command.is_empty() {
-            continue;
-        }
-
-        if executable_command.contains("| tpaste") {
-            let cmd_to_run = executable_command
-                .replace("| tpaste", "")
-                .trim()
-                .to_string();
-
-            match Command::new("sh").arg("-c").arg(&cmd_to_run).output() {
-                Ok(output) => {
-                    let stdout = String::from_utf8_lossy(&output.stdout);
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    let content = format!("{}{}", stdout, stderr);
-
-                    if content.trim().is_empty() {
-                        let _ = stream.write_all(b"ERR: Comanda nu a produs niciun output.\n");
-                    } else {
-                        let code = generate_paste_code();
-                        match db.create_paste(&authenticated_user_id.unwrap(), &code, &content) {
-                            Ok(_) => {
-                                let msg = format!("SUCCESS: Paste generat! Cod: link:{}\n", code);
-                                let _ = stream.write_all(msg.as_bytes());
-                            }
-                            Err(e) => {
-                                let _ = stream.write_all(format!("ERR DB: {}\n", e).as_bytes());
-                            }
+        if executable_command.contains("link:") {
+            let code = executable_command.replace("link:", "").trim().to_string();
+            //looking for paste
+            match db.get_paste_by_code(&code) {
+                Ok(paste) => {
+                    //search the user by user id
+                    match db.get_user_id(paste.user_id) {
+                        Ok(user) => {
+                            //format the message
+                            let response = format!(
+                                "Author:{} \n Date:{}\nContent:{}",
+                                user.username,
+                                paste.created_at.format("%Y-%m-%d %H:%M:%S"),
+                                paste.content
+                            );
+                            stream.write_all(response.as_bytes()).unwrap()
+                        }
+                        Err(e) => {
+                            stream.write_all(b"The author of this paste doesn't exist anymore\n");
                         }
                     }
                 }
                 Err(e) => {
-                    let _ = stream.write_all(format!("ERR EXEC: {}\n", e).as_bytes());
+                    stream.write_all(b"Err:Your provided code doesn't exist\n");
                 }
             }
         }
-    }*/
+    }
 }
 fn main() {
     let db = Database::new("tpaste.db").expect("Error:can not create the DB");
