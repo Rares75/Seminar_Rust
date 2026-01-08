@@ -123,7 +123,7 @@ fn handle_client(mut stream: TcpStream, db: Database) {
             }
         }
     }
-    /*loop {
+    loop {
         command = read_line(&mut stream);
         let executable_command = command.trim();
         let mut content = String::from("");
@@ -171,8 +171,8 @@ fn handle_client(mut stream: TcpStream, db: Database) {
                 }
             }
         }
-    }*/
-    loop {
+    }
+    /*loop {
         let command = read_line(&mut stream);
         let executable_command = command.trim();
 
@@ -212,7 +212,7 @@ fn handle_client(mut stream: TcpStream, db: Database) {
                 }
             }
         }
-    }
+    }*/
 }
 fn main() {
     let db = Database::new("tpaste.db").expect("Error:can not create the DB");
