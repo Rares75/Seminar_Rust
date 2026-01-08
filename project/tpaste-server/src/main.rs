@@ -224,13 +224,25 @@ fn handle_client(mut stream: TcpStream, db: Database) {
                 }
             }
         }
+        if executable_command == "my_pastes" {
+            match db.get_user_pastes(authenticated_user_id.unwrap()) {
+                Ok(history) => {
+                    stream.write_all(history.as_bytes()).unwrap();
+                }
+                Err(e) => {
+                    stream
+                        .write_all(format!("ERR: Nu am putut prelua istoricul: {}\n", e).as_bytes())
+                        .unwrap();
+                }
+            }
+        }
         if executable_command.contains("exit") {
             stream.write_all(b"Goodbye!").unwrap();
             break; // Close the connection
         }
         if executable_command.contains("help") {
             stream
-                .write_all(b"Availble commands are link:code, and | tpaste")
+                .write_all(b"Availble commands are link:code,my_pastes and | tpaste")
                 .unwrap();
         }
     }

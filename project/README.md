@@ -6,11 +6,12 @@ A lightweight, multi-user pastebin service written in Rust. Share command output
 
 TPaste is a distributed pastebin application consisting of a server and client component. It allows users to:
 
-- **Capture command outputs** and save them to the server
-- **Share pastes** via unique codes
-- **Authenticate securely** with username/password and token-based sessions
-- **Retrieve pastes** created by other users
-- **Automatic token-based login** for returning users
+- **Capture command outputs** via shell pipes and save them to the server
+- **Share pastes** via unique 10-character codes
+- **Authenticate securely** with username/password and 60-day session tokens
+- **Retrieve pastes** created by other users by paste code
+- **Automatic token-based login** for returning users with local token persistence
+- **View paste history** from your account
 
 ## 🏗️ Architecture
 
@@ -19,56 +20,73 @@ TPaste is a distributed pastebin application consisting of a server and client c
 ```
 ├── tpaste-server/          # TCP server handling authentication and paste storage
 │   ├── src/
-│   │   ├── main.rs         # Main server loop, connection handling
-│   │   ├── db_functions.rs # Database operations (SQLite)
+│   │   ├── main.rs         # Main server loop, connection handling, command routing
+│   │   ├── db_functions.rs # Database operations (SQLite) - CRUD operations
 │   │   ├── db_model.rs     # Data structures (User, Paste, Token)
-│   │   ├── helper_funcions.rs # Utilities (password hashing, code generation)
-│   │   └── login.rs        # Placeholder login functions
+│   │   └── helper_funcions.rs # Utilities (password validation, code/token generation)
 │   └── Cargo.toml          # Server dependencies
 │
 └── tpaste-cli/             # TCP client for user interaction
     ├── src/
-    │   └── main.rs         # Client implementation with pipe support
+    │   └── main.rs         # Interactive CLI with automatic token login and pipe support
     └── Cargo.toml          # Client dependencies
 ```
 
 ### Technology Stack
 
-- **Language**: Rust
+- **Language**: Rust (Edition 2021)
 - **Protocol**: Raw TCP with newline-delimited messages
 - **Database**: SQLite with bcrypt password hashing
-- **Authentication**: Username/password + session tokens
-- **Concurrency**: Thread-per-connection model
+- **Authentication**: Username/password + 60-day session tokens
+- **Concurrency**: Thread-per-connection model for handling multiple clients
+- **Dependencies**: rusqlite, bcrypt, chrono, serde
 
 ## 📋 Features
 
 ### User Authentication
 
-- User registration with username validation (3-30 characters, alphanumeric + underscore)
-- Secure password hashing using bcrypt
-- Session tokens with 60-day expiration
-- Automatic token-based login
+- **User registration** with strict validation:
+  - Usernames: 3-30 characters, alphanumeric + underscore only
+  - Passwords: 6-100 characters
+  - Duplicate username prevention
+- **Secure password storage** using bcrypt hashing
+- **Session tokens** with 60-day expiration
+- **Automatic token-based login** on reconnection (token saved locally)
+- **Token validation** with expiration checking
 
 ### Paste Management
 
-- Save command outputs with unique 10-character codes
-- Query pastes by code
-- View paste metadata (author, creation date)
-- Automatic cascade deletion when user is deleted
+- **Save command outputs** with unique 10-character random codes (alphanumeric)
+- **Retrieve pastes** by code with author and timestamp information
+- **View paste history** - list all pastes created by current user
+- **Paste metadata** - author username, creation date, and full content
+- **Cascade deletion** - pastes automatically deleted when user is deleted
+- **Combine stdout and stderr** in saved pastes
 
 ### Client Features
 
-- Interactive CLI interface
-- Pipe support: `command | tpaste`
-- Token-based session persistence
-- Help command for available operations
+- **Interactive CLI** prompt interface (`tpaste>`)
+- **Pipe support** - capture command output directly: `command | tpaste`
+- **Automatic token persistence** - session tokens saved to `.tpaste_token`
+- **Auto-login on startup** - uses saved token if valid
+- **Help command** - view available commands
+- **Graceful disconnection** - `exit` or `quit` commands
+
+### Server Features
+
+- **Multi-client support** - handles concurrent connections with thread-per-connection model
+- **User isolation** - users can only see their own paste history
+- **Database consistency** - foreign keys with cascade deletion
+- **Optimized queries** - indexed lookups on paste codes and tokens
+- **Error handling** - comprehensive error messages for all operations
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 
-- Rust 1.70+ (Edition 2024 or adjust Cargo.toml)
+- Rust 1.70+ (Edition 2021)
 - Linux/macOS/Windows with TCP networking support
+- SQLite3 (usually included or downloaded automatically by rusqlite)
 
 ### Building
 
@@ -87,166 +105,174 @@ cd tpaste-cli && cargo build --release
 
 ```bash
 cd tpaste-server
-./target/release/tpaste-server
-# Server starts on 127.0.0.1:8080
+cargo run --release
+# Or: ./target/release/tpaste-server
+# Server listens on 127.0.0.1:8080
 # Creates tpaste.db in current directory
+# Output: "Server started"
 ```
 
 #### Client
 
 ```bash
 cd tpaste-cli
-./target/release/tpast-cli
-# Connect to server and start entering commands
+cargo run --release
+# Or: ./target/release/tpast-cli
+# Automatically logs in with saved token if available
+# Otherwise prompts for authentication
+# Shows: "Connected to tpaste server. Type 'help' for commands."
 ```
 
 ## 📖 Usage Guide
 
-### Client Commands
+### Authentication Flow
 
-#### Registration
+#### First-time Registration
 
 ```
 tpaste> sign_up
-Enter username: myuser
-Enter password: mypassword
+Enter username: john_doe
+Enter password: SecurePass123
 OK: Account created and logged in.
+you are logged in,now you have accest to tpaste server
 ```
 
-#### Login
+#### Login with Credentials
 
 ```
 tpaste> login
-Enter username: myuser
-Enter password: mypassword
-OK: Login successful! TOKEN:abc123...
+Enter username: john_doe
+Enter password: SecurePass123
+OK: Login successful! TOKEN:a1b2c3d4e5f6...
 Session saved locally.
 ```
 
-#### Save Command Output
+#### Automatic Token Login
 
 ```
-tpaste> echo "Hello, World!" | tpaste
-SUCCESS: Paste created! Code: sl6DqnGHEX
+# On reconnection (if .tpaste_token exists):
+Automatically logged in via token.
 ```
 
-#### Retrieve a Paste
+### Working with Pastes
+
+#### Save Command Output (with Pipe)
+
+```bash
+$ echo "Hello, World!" | tpaste
+Message saved with code: aBcDeFgHiJ,your user id: 1
+```
+
+Or from interactive CLI:
 
 ```
-tpaste> link:sl6DqnGHEX
-Author: myuser
-Date: 2026-01-08 10:30:45
-Content: Hello, World!
+tpaste> echo "System info:" | tpaste
+Message saved with code: xYz1aB2cD3,your user id: 1
 ```
 
-#### Available Commands
+#### Retrieve a Paste by Code
+
+```
+tpaste> link:xYz1aB2cD3
+Author: john_doe
+Date: 2025-01-08 15:30:45
+Content: System info: Linux kernel 5.15.0...
+```
+
+#### View Your Paste History
+
+```
+tpaste> my_pastes
+Code: aBcDeFgHiJ | Date: 2025-01-08 14:22:10
+Code: xYz1aB2cD3 | Date: 2025-01-08 15:30:45
+```
+
+#### Get Help
 
 ```
 tpaste> help
-Available commands:
-  tpaste <command> - Save command output to paste
-  exit - Disconnect
-  help - Show this message
+Availble commands are link:code,my_pastes and | tpaste
 ```
 
-### Direct Pipe Usage
+#### Disconnect
 
-```bash
-# Send output directly from pipe without interactive CLI
-ls -la | ./tpast-cli
-whoami | ./tpast-cli
-cat file.txt | ./tpast-cli
+```
+tpaste> exit
+Goodbye!
 ```
 
-### Automatic Token Login
-
-- Token is saved to `.tpaste_token` in client directory
-- On next connection, client automatically logs in if valid token exists
-- Session persists across client restarts (within 60-day expiration)
 
 ## 🔌 Protocol Specification
 
 ### Message Format
 
-All messages are newline-delimited (`\n`)
+All messages are newline-delimited (`\n`). The protocol is text-based and simple.
 
 ### Authentication Messages
 
-**Sign Up:**
-
+**Sign Up Request:**
 ```
 sign_up
 username
 password
 ```
 
-Response:
-
-```
-OK: Account created and logged in.
-```
-
-**Login:**
-
+**Login Request:**
 ```
 login
 username
 password
 ```
 
-Response:
-
-```
-OK: Login successful! TOKEN:token_string
-```
-
-**Token Login:**
-
+**Token Login Request:**
 ```
 token
 token_string
 ```
 
-Response:
-
+**Server Responses:**
 ```
+OK: Account created and logged in.
+OK: Login successful! TOKEN:token_string
 OK: Welcome back via token!
+ERR: Username invalid: reason
+ERR: Username already exists
+ERR: Login failed: invalid credentials
+ERR: Token invalid or expired.
 ```
 
-### Paste Messages
+### Command Messages
 
-**Create Paste:**
-
+**Paste Creation (via pipe):**
 ```
-echo "content" | tpaste
-```
-
-Response:
-
-```
-SUCCESS: Paste created! Code: code123ABC
+command_output | tpaste
 ```
 
-**Retrieve Paste:**
-
+**Paste Retrieval:**
 ```
-link:code123ABC
-```
-
-Response:
-
-```
-Author: username
-Date: 2026-01-08 10:30:45
-Content: paste content here
+link:paste_code
 ```
 
-## 💾 Database Schema
+**View User Pastes:**
+```
+my_pastes
+```
+
+**Get Help:**
+```
+help
+```
+
+**Disconnect:**
+```
+exit
+```
+
+## 🗄️ Database Schema
 
 ### Users Table
-
 ```sql
-CREATE TABLE users (
+CREATE TABLE users(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
@@ -255,9 +281,8 @@ CREATE TABLE users (
 ```
 
 ### Pastes Table
-
 ```sql
-CREATE TABLE pastes (
+CREATE TABLE pastes(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     code TEXT NOT NULL UNIQUE,
@@ -265,170 +290,110 @@ CREATE TABLE pastes (
     created_at TEXT NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+CREATE INDEX idx_pastes_code ON pastes(code);
 ```
 
 ### Tokens Table
-
 ```sql
-CREATE TABLE tokens (
+CREATE TABLE tokens(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     token TEXT NOT NULL UNIQUE,
     created_at TEXT NOT NULL,
     expires_at TEXT NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+CREATE INDEX idx_tokens_token ON tokens(token);
 ```
 
-### Indexes
+## 🔒 Security Features
 
-- `idx_pastes_code` - Fast paste lookup by code
-- `idx_tokens_token` - Fast token validation
+- **Bcrypt hashing** - passwords hashed with bcrypt before storage
+- **Token expiration** - tokens expire after 60 days and are validated on each use
+- **SQL injection prevention** - uses parameterized queries throughout
+- **Password validation** - enforces minimum length (6 chars) and maximum (100 chars)
+- **Username validation** - alphanumeric + underscore only, 3-30 character limit
+- **User isolation** - users can only access their own paste history
+- **Secure random tokens** - 32-character hex tokens generated from system time and PID
 
-## 🔐 Security Features
+## 🛠️ Implementation Details
 
-- **Password Hashing**: bcrypt with configurable cost (default 12)
-- **Username Lowercasing**: Prevents impersonation attacks
-- **Token Expiration**: 60-day sliding window per login
-- **SQL Injection Prevention**: Parameterized queries throughout
-- **Input Validation**: Username and password constraints enforced
+### Code Generation Algorithm
 
-## 🛠️ Configuration
+Paste codes are 10-character random alphanumeric strings generated using:
+- System timestamp as seed
+- Linear congruential pseudo-random number generator
+- Character set: `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789`
 
-### Server
+### Token Generation Algorithm
 
-Edit connection address in `src/main.rs`:
+Auth tokens are 32-character hex strings generated using:
+- System timestamp hash
+- Process ID hash
+- Double hashing for additional entropy
 
+### Output Capture
+
+The server captures both `stdout` and `stderr` from executed commands:
 ```rust
-TcpListener::bind("127.0.0.1:8080").unwrap();
+let stdout = String::from_utf8_lossy(&output.stdout);
+let stderr = String::from_utf8_lossy(&output.stderr);
+let content = format!("{}{}", stdout, stderr);
 ```
 
-### Database
-
-Database file location: `tpaste.db` (created in server's working directory)
-
-### Token Expiration
-
-Edit token lifetime in `db_functions.rs`:
-
-```rust
-let expires_at = created_at + Duration::days(60);
-```
-
-## 📦 Dependencies
-
-### Server
-
-- `rusqlite` 0.38.0 - SQLite database driver
-- `bcrypt` 0.17.1 - Password hashing
-- `chrono` 0.4 - Date/time handling
-- `serde` / `serde_json` - JSON serialization
-- `serde_derive` - Derive macros
-
-### Client
-
-- `rusqlite` 0.38.0 - Database support
-
-## ⚠️ Current Limitations & Known Issues
-
-1. **Edition Mismatch**: Cargo.toml specifies edition 2024 (not yet released). Change to 2021:
-
-   ```toml
-   edition = "2021"
-   ```
-
-2. **Unused Imports**: 32 compiler warnings for unused imports/functions
-
-   - Consider removing unused database methods (`read_token_from_file`, `save_token_to_file`)
-   - Clean up unused imports in each module
-
-3. **No Rate Limiting**: No protection against spam/abuse
-4. **Plain TCP**: No encryption; use in secure networks only
-5. **Hardcoded Address**: Server bound to localhost only
-6. **Single Machine**: Token-based auth only works with single server instance
-
-## 🚧 Future Improvements
-
-- [ ] Fix Cargo.toml edition to 2021
-- [ ] Remove all unused imports and functions
-- [ ] Add TLS/encryption support
-- [ ] Implement rate limiting
-- [ ] Add paste expiration mechanism
-- [ ] Support distributed token validation
-- [ ] Implement paste deletion by owner
-- [ ] Add paste search functionality
-- [ ] Web UI for paste sharing
-- [ ] Docker containerization
-- [ ] Configuration file support
-- [ ] Metrics and logging
-- [ ] Comprehensive test suite
-
-## 📝 File Structure
-
-```
-project/
-├── README.md                          # This file
-├── tpaste-server/
-│   ├── Cargo.toml
-│   ├── src/
-│   │   ├── main.rs                   # 245 lines - Server entry point & connection handler
-│   │   ├── db_functions.rs           # 282 lines - Database operations
-│   │   ├── db_model.rs               # 28 lines - Data models
-│   │   ├── helper_funcions.rs        # 112 lines - Utility functions
-│   │   └── login.rs                  # 14 lines - Login stubs
-│   └── target/
-│       └── debug/tpaste-server       # Compiled binary
-│
-├── tpaste-cli/
-│   ├── Cargo.toml
-│   ├── src/
-│   │   └── main.rs                   # 107 lines - Client implementation
-│   └── target/
-│       └── debug/tpast-cli           # Compiled binary
-│
-└── users.txt                          # (unused)
-```
-
-## 🧪 Testing
-
-### Quick Test Flow
+## 📝 Complete Workflow Example
 
 ```bash
 # Terminal 1 - Start server
 cd tpaste-server
-./target/debug/tpaste-server
+cargo run --release
+# Output: Server started
 
-# Terminal 2 - Run client
+# Terminal 2 - Client registration and usage
 cd tpaste-cli
-./target/debug/tpast-cli
+cargo run --release
+# Output: Connected to tpaste server...
 
-# In client:
-sign_up
-testuser
-password123
+tpaste> sign_up
+Enter username: alice
+Enter password: MySecurePass123
+OK: Account created and logged in.
+you are logged in,now you have accest to tpaste server
 
-ls -la | tpaste
-# Get the code: abc123XYZ
+# Save some command output
+tpaste> whoami | tpaste
+Message saved with code: Kx9mNpQrSt,your user id: 1
 
-link:abc123XYZ
-# See paste content with metadata
+# Exit and reconnect (will auto-login)
+tpaste> exit
+Goodbye!
+
+# Reconnect
+cargo run --release
+Automatically logged in via token.
+
+# Retrieve the paste
+tpaste> link:Kx9mNpQrSt
+Author: alice
+Date: 2026-01-08 10:15:30
+Content: alice
 ```
 
-### Pipe Test
+## 🐛 Known Limitations
 
-```bash
-echo "test content" | ./tpast-cli
-```
+- Server runs on hardcoded address `127.0.0.1:8080` (not configurable)
+- Username comparison is case-insensitive (stored as-is but checked lowercase)
+- No encryption on the wire (consider TLS for production)
+- SQLite is single-file, suitable for small deployments
+- Thread-per-connection model not optimal for many concurrent users
 
-## 📄 License
+## 🚀 Future Improvements
 
-This is a Rust seminar project. No specific license defined.
-
-## 👤 Author
-
-Seminar Rust Project (2026)
-
----
-
-**Last Updated**: January 8, 2026
-**Status**: Working (32 compiler warnings - unused code to clean up)
+- [ ] TLS/SSL encryption for wire security
+- [ ] Configuration file support (port, bind address, database path)
+- [ ] User account deletion endpoint
+- [ ] Paste expiration and auto-cleanup
+- [ ] Bulk paste download
+- [ ] Web interface alongside CLI
+- [ ] Rate limiting
+- [ ] Audit logging

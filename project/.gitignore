@@ -5,3 +5,4 @@
 /tpaste-server/Cargo.lock
 tpaste.db
 users.txt
+/tpaste-cli/.tpaste_token

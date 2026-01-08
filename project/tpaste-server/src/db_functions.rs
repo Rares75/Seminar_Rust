@@ -275,4 +275,41 @@ impl Database {
             Err(_) => Err("Wrong username or password!".to_string()),
         }
     }
+    pub fn get_user_pastes(&self, user_id: i64) -> Result<String, String> {
+        let conn = self.conn.lock().unwrap();
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT code, created_at FROM pastes WHERE user_id = ?1 ORDER BY created_at DESC",
+            )
+            .map_err(|e| e.to_string())?;
+
+        let paste_iter = stmt
+            .query_map([user_id], |row| {
+                let code: String = row.get(0)?;
+                let date: String = row.get(1)?;
+
+                let formatted_date = chrono::DateTime::parse_from_rfc3339(&date)
+                    .map(|dt| dt.format("%Y-%m-%d %H:%M").to_string())
+                    .unwrap_or(date);
+
+                Ok(format!("- link:{} | Created at:: {}", code, formatted_date))
+            })
+            .map_err(|e| e.to_string())?;
+
+        let mut result = String::from("Your Pastes:\n");
+        let mut count = 0;
+
+        for line in paste_iter.flatten() {
+            result.push_str(&line);
+            result.push('\n');
+            count += 1;
+        }
+
+        if count == 0 {
+            return Ok("You don't have any pastes\n".to_string());
+        }
+
+        Ok(result)
+    }
 }
