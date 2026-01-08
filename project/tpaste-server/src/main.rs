@@ -102,12 +102,34 @@ fn handle_client(mut stream: TcpStream, db: Database) {
                     Ok(id) => {
                         authenticated_user_id = Some(id);
                         connected = true;
-                        stream.write_all(b"OK: Login successful!\n").unwrap();
+
+                        // GENERARE TOKEN NOU
+                        let new_token = helper_funcions::generate_auth_token();
+                        db.create_token(id, &new_token).unwrap();
+
+                        // Trimitem mesajul cu formatul pe care clientul îl așteaptă: "TOKEN:..."
+                        let success_msg = format!("OK: Login successful! TOKEN:{}\n", new_token);
+                        stream.write_all(success_msg.as_bytes()).unwrap();
                     }
                     Err(e) => {
                         stream
                             .write_all(format!("ERR: Login failed: {}\n", e).as_bytes())
                             .unwrap();
+                    }
+                }
+            }
+            "token" => {
+                let token_raw = read_line(&mut stream);
+                let token = token_raw.trim();
+
+                match db.validate_token(token) {
+                    Ok(Some(id)) => {
+                        authenticated_user_id = Some(id);
+                        connected = true; // Aceasta va opri bucla while și va trece la loop-ul următor
+                        let _ = stream.write_all(b"OK: Welcome back via token!\n");
+                    }
+                    _ => {
+                        let _ = stream.write_all(b"ERR: Token invalid sau expirat.\n");
                     }
                 }
             }

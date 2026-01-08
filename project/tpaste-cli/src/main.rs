@@ -1,20 +1,6 @@
 use std::io::{self, IsTerminal, Read, Write, stdin, stdout};
 use std::net::TcpStream;
 
-// Funcție pentru a citi și afișa TOT ce trimite serverul (inclusiv output-uri lungi de la ls/cat)
-fn read_server_response(stream: &mut TcpStream) {
-    let mut buffer = [0; 8192]; // Buffer mai mare pentru output-uri de comenzi
-    match stream.read(&mut buffer) {
-        Ok(n) => {
-            let response = String::from_utf8_lossy(&buffer[..n]);
-            print!("{}", response); // Folosim print! nu println! pentru că serverul trimite deja \n
-            io::stdout().flush().unwrap();
-        }
-        Ok(0) => println!("\nServer disconnected."),
-        Err(e) => println!("\nError reading from server: {}", e),
-    }
-}
-
 fn handle_auth(stream: &mut TcpStream, cmd_type: &str) {
     let mut username = String::new();
     let mut password = String::new();
@@ -34,6 +20,26 @@ fn handle_auth(stream: &mut TcpStream, cmd_type: &str) {
     read_server_response(stream);
 }
 
+fn read_server_response(stream: &mut TcpStream) {
+    let mut buffer = [0; 4096];
+    if let Ok(n) = stream.read(&mut buffer) {
+        if n > 0 {
+            let response = String::from_utf8_lossy(&buffer[..n]);
+            println!("{}", response);
+
+            // Dacă serverul ne-a trimis un token, îl salvăm
+            if response.contains("TOKEN:") {
+                if let Some(token) = response.split("TOKEN:").nth(1) {
+                    let clean_token = token.trim();
+                    std::fs::write(".tpaste_token", clean_token)
+                        .expect("Nu am putut salva token-ul");
+                    println!("Sesiune salvata local.");
+                }
+            }
+        }
+    }
+}
+
 fn main() {
     let mut stream = TcpStream::connect("127.0.0.1:8080").expect("Connection refused");
     println!("Connected to tpaste server. Type 'help' for commands.");
@@ -50,7 +56,23 @@ fn main() {
         }
         return;
     }
+    if std::path::Path::new(".tpaste_token").exists() {
+        if let Ok(token) = std::fs::read_to_string(".tpaste_token") {
+            let payload = format!("token\n{}\n", token.trim());
+            stream.write_all(payload.as_bytes()).unwrap();
 
+            // Citim răspunsul să vedem dacă am reușit
+            let mut buf = [0; 512];
+            if let Ok(n) = stream.read(&mut buf) {
+                let res = String::from_utf8_lossy(&buf[..n]);
+                if res.contains("OK:") {
+                    println!("Logat automat prin token.");
+                } else {
+                    println!("Token-ul a expirat. Te rugam sa te loghezi manual.");
+                }
+            }
+        }
+    }
     loop {
         print!("tpaste> ");
         stdout().flush().unwrap();

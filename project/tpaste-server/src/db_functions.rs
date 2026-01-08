@@ -154,7 +154,7 @@ impl Database {
         let expires_at = created_at + Duration::days(60);
 
         conn.execute(
-            "INSERT INTO auth_tokens(user_id,token,created_at,expires_at) VALUES (?1,?2,?3,?4)",
+            "INSERT INTO tokens(user_id,token,created_at,expires_at) VALUES (?1,?2,?3,?4)",
             params![
                 user_id,
                 token,
@@ -169,28 +169,43 @@ impl Database {
     //validate a token
     pub fn validate_token(&self, token: &str) -> Result<Option<i64>> {
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare("SELECT user_id,expires_at FROM auth_token=?1")?;
+        // 1. Corectează SQL-ul: tabelul "tokens" (cum l-ai creat) și clauza WHERE
+        let mut stmt = conn.prepare("SELECT user_id, expires_at FROM tokens WHERE token = ?1")?;
 
-        let result = stmt.query_row(params![token], |row| {
+        let result = stmt.query_row(params![token.trim()], |row| {
+            // Trim aici pentru siguranță
             let user_id: i64 = row.get(0)?;
             let expires_str: String = row.get(1)?;
-            let expires_at = DateTime::parse_from_rfc3339(&expires_str)
-                .unwrap()
-                .with_timezone(&Utc);
-
-            Ok((user_id, expires_at))
+            Ok((user_id, expires_str))
         });
 
         match result {
-            Ok((user_id, expires_at)) => {
-                //check if the token expired
-                if Utc::now() > expires_at {
-                    Ok(None) //expired token
+            Ok((user_id, expires_str)) => {
+                // 2. Parsarea datei cu detectarea erorilor
+                let expires_at = DateTime::parse_from_rfc3339(&expires_str)
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .map_err(|e| {
+                        eprintln!("Eroare parsare data: {}", e);
+                        e
+                    })
+                    .ok();
+
+                if let Some(expiry) = expires_at {
+                    if Utc::now() > expiry {
+                        println!("Token expirat pentru user {}", user_id);
+                        Ok(None)
+                    } else {
+                        Ok(Some(user_id))
+                    }
                 } else {
-                    Ok(Some(user_id)) //validate token
+                    Ok(None)
                 }
             }
-            Err(e) => Ok(None), //token doesn't exist
+            Err(e) => {
+                // Dacă ajungem aici, probabil token-ul nu a fost găsit în DB
+                println!("Token-ul nu a fost găsit în DB: {}", e);
+                Ok(None)
+            }
         }
     }
 
