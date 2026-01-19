@@ -201,7 +201,6 @@ tpaste> exit
 Goodbye!
 ```
 
-
 ## 🔌 Protocol Specification
 
 ### Message Format
@@ -211,6 +210,7 @@ All messages are newline-delimited (`\n`). The protocol is text-based and simple
 ### Authentication Messages
 
 **Sign Up Request:**
+
 ```
 sign_up
 username
@@ -218,6 +218,7 @@ password
 ```
 
 **Login Request:**
+
 ```
 login
 username
@@ -225,12 +226,14 @@ password
 ```
 
 **Token Login Request:**
+
 ```
 token
 token_string
 ```
 
 **Server Responses:**
+
 ```
 OK: Account created and logged in.
 OK: Login successful! TOKEN:token_string
@@ -244,26 +247,31 @@ ERR: Token invalid or expired.
 ### Command Messages
 
 **Paste Creation (via pipe):**
+
 ```
 command_output | tpaste
 ```
 
 **Paste Retrieval:**
+
 ```
 link:paste_code
 ```
 
 **View User Pastes:**
+
 ```
 my_pastes
 ```
 
 **Get Help:**
+
 ```
 help
 ```
 
 **Disconnect:**
+
 ```
 exit
 ```
@@ -271,6 +279,7 @@ exit
 ## 🗄️ Database Schema
 
 ### Users Table
+
 ```sql
 CREATE TABLE users(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -281,6 +290,7 @@ CREATE TABLE users(
 ```
 
 ### Pastes Table
+
 ```sql
 CREATE TABLE pastes(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -294,6 +304,7 @@ CREATE INDEX idx_pastes_code ON pastes(code);
 ```
 
 ### Tokens Table
+
 ```sql
 CREATE TABLE tokens(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -321,6 +332,7 @@ CREATE INDEX idx_tokens_token ON tokens(token);
 ### Code Generation Algorithm
 
 Paste codes are 10-character random alphanumeric strings generated using:
+
 - System timestamp as seed
 - Linear congruential pseudo-random number generator
 - Character set: `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789`
@@ -328,6 +340,7 @@ Paste codes are 10-character random alphanumeric strings generated using:
 ### Token Generation Algorithm
 
 Auth tokens are 32-character hex strings generated using:
+
 - System timestamp hash
 - Process ID hash
 - Double hashing for additional entropy
@@ -335,6 +348,7 @@ Auth tokens are 32-character hex strings generated using:
 ### Output Capture
 
 The server captures both `stdout` and `stderr` from executed commands:
+
 ```rust
 let stdout = String::from_utf8_lossy(&output.stdout);
 let stderr = String::from_utf8_lossy(&output.stderr);
