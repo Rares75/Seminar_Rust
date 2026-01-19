@@ -1,0 +1,11 @@
+[workspace]
+members = [
+    "lab01",
+    "lab02",
+    "lab04",
+    "lab05",
+    "lab06",
+    "lab07",
+    "project/tpaste-server",
+    "project/tpaste-cli",
+]
