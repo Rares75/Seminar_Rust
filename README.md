@@ -1,7 +1,6 @@
 # Rust Seminar Exercises & Final Project
 
-**Author:** Cabalau Rares (B2)  
-**Course:** Rust Programming Seminar - Faculty of Computer Science
+**Course:** Rust Programming - Faculty of Computer Science Iasi
 
 This repository contains all exercises completed during a Rust programming seminar at the faculty, plus a comprehensive final project demonstrating advanced Rust concepts.
 
